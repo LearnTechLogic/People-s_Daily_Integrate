@@ -17,13 +17,11 @@ except ImportError:
     FILENAME_TEMPLATE = "人民日报_{date}.pdf"
 
 
-class CalendarPopup(tk.Toplevel):
-    def __init__(self, parent, callback=None):
+class CalendarWidget(ttk.Frame):
+    def __init__(self, parent, callback=None, toggle_callback=None):
         super().__init__(parent)
         self.callback = callback
-        self.title("选择日期")
-        self.geometry("300x350")
-        self.resizable(False, False)
+        self.toggle_callback = toggle_callback
         
         self.current_date = datetime.now()
         self.selected_date = None
@@ -59,7 +57,7 @@ class CalendarPopup(tk.Toplevel):
         
         ttk.Button(button_frame, text="今天", command=self.select_today).pack(side="left", padx=5)
         ttk.Button(button_frame, text="昨天", command=self.select_yesterday).pack(side="left", padx=5)
-        ttk.Button(button_frame, text="确定", command=self.confirm).pack(side="right", padx=5)
+        ttk.Button(button_frame, text="收起", command=self.collapse).pack(side="right", padx=5)
         
     def update_calendar(self):
         for widget in self.calendar_frame.winfo_children():
@@ -92,18 +90,27 @@ class CalendarPopup(tk.Toplevel):
     
     def select_date(self, date_str):
         self.selected_date = date_str
-        for widget in self.calendar_frame.winfo_children():
-            if isinstance(widget, ttk.Button):
-                widget.state(["!pressed"])
+        if self.callback:
+            self.callback(date_str)
+        self.collapse()
     
     def select_today(self):
         self.selected_date = datetime.now().strftime("%Y-%m-%d")
-        self.confirm()
+        if self.callback:
+            self.callback(self.selected_date)
+        self.collapse()
     
     def select_yesterday(self):
         yesterday = datetime.now() - timedelta(days=1)
         self.selected_date = yesterday.strftime("%Y-%m-%d")
-        self.confirm()
+        if self.callback:
+            self.callback(self.selected_date)
+        self.collapse()
+    
+    def collapse(self):
+        self.pack_forget()
+        if self.toggle_callback:
+            self.toggle_callback()
     
     def prev_month(self):
         if self.current_date.month == 1:
@@ -118,23 +125,19 @@ class CalendarPopup(tk.Toplevel):
         else:
             self.current_date = self.current_date.replace(month=self.current_date.month + 1)
         self.update_calendar()
-    
-    def confirm(self):
-        if self.selected_date and self.callback:
-            self.callback(self.selected_date)
-        self.destroy()
 
 
 class SimpleGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("人民日报爬取工具")
-        self.root.geometry("680x600")
+        self.root.geometry("680x700")
         
         self.center_window()
         
         self.crawler = PeopleDailyCrawler()
         self.is_running = False
+        self.calendar_visible = False
         
         self.setup_ui()
         
@@ -165,8 +168,9 @@ class SimpleGUI:
                                           values=recent_dates, width=15, state="readonly")
         self.date_combobox.pack(side="left")
         
-        tk.Button(date_entry_frame, text="📅 选择日期", command=self.show_calendar, 
-                 font=("SimHei", 9)).pack(side="left", padx=5)
+        self.toggle_calendar_btn = tk.Button(date_entry_frame, text="📅 选择日期", command=self.toggle_calendar, 
+                                              font=("SimHei", 9))
+        self.toggle_calendar_btn.pack(side="left", padx=5)
         
         quick_dates_frame = tk.Frame(frame1)
         quick_dates_frame.pack(side="left", padx=10)
@@ -178,16 +182,22 @@ class SimpleGUI:
         tk.Button(quick_dates_frame, text="前天", command=lambda: self.set_quick_date(2), 
                  font=("SimHei", 9)).pack(side="left", padx=2)
         
-        frame2 = tk.Frame(self.root)
-        frame2.pack(pady=10, padx=20, fill="x")
+        self.calendar_container = ttk.Frame(self.root)
+        self.calendar_container.pack(pady=5, padx=20, fill="x")
+        self.calendar_container.pack_forget()
         
-        tk.Label(frame2, text="输出路径:", font=("SimHei", 10)).pack(side="left")
+        self.calendar_widget = CalendarWidget(self.calendar_container, self.set_date, self._hide_calendar)
+        
+        self.frame2 = tk.Frame(self.root)
+        self.frame2.pack(pady=10, padx=20, fill="x")
+        
+        tk.Label(self.frame2, text="输出路径:", font=("SimHei", 10)).pack(side="left")
         
         self.output_var = tk.StringVar(value=DEFAULT_OUTPUT_PATH)
-        self.output_entry = tk.Entry(frame2, textvariable=self.output_var, width=40)
+        self.output_entry = tk.Entry(self.frame2, textvariable=self.output_var, width=40)
         self.output_entry.pack(side="left", padx=10)
         
-        tk.Button(frame2, text="浏览", command=self.browse_output).pack(side="left")
+        tk.Button(self.frame2, text="浏览", command=self.browse_output).pack(side="left")
         
         self.start_button = tk.Button(self.root, text="开始爬取", command=self.start_crawling, 
                                       font=("SimHei", 12), width=20, bg="#4CAF50", fg="white")
@@ -200,11 +210,23 @@ class SimpleGUI:
         
         self.log_text.insert("end", "程序已启动！请设置参数后点击开始爬取。\n")
         
-    def show_calendar(self):
-        calendar_popup = CalendarPopup(self.root, self.set_date)
-        calendar_popup.transient(self.root)
-        calendar_popup.grab_set()
-        self.root.wait_window(calendar_popup)
+    def toggle_calendar(self):
+        if self.calendar_visible:
+            self._hide_calendar()
+        else:
+            self._show_calendar()
+    
+    def _show_calendar(self):
+        self.calendar_container.pack(pady=5, padx=20, fill="x", before=self.frame2)
+        self.calendar_widget.pack(fill="x", padx=10, pady=5)
+        self.toggle_calendar_btn.config(text="📅 收起日历")
+        self.calendar_visible = True
+    
+    def _hide_calendar(self):
+        self.calendar_widget.pack_forget()
+        self.calendar_container.pack_forget()
+        self.toggle_calendar_btn.config(text="📅 选择日期")
+        self.calendar_visible = False
         
     def set_date(self, date_str):
         self.date_var.set(date_str)

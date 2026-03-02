@@ -20,13 +20,13 @@ import os
 
 # 方式1: 只指定目录（推荐！自动生成带日期的文件名）
 # 程序会自动生成类似: 人民日报_2026-03-01.pdf
-DEFAULT_OUTPUT_PATH = os.path.join(os.path.expanduser("~"), "Desktop")
+# DEFAULT_OUTPUT_PATH = os.path.join(os.path.expanduser("~"), "Desktop")
 
 # 方式2: 指定完整文件名
 # DEFAULT_OUTPUT_PATH = os.path.join(os.path.expanduser("~"), "Desktop", "人民日报.pdf")
 
 # 方式3: 您的情况 - 保存到E盘考公文件夹
-# DEFAULT_OUTPUT_PATH = "E:\\考公\人民日报"
+DEFAULT_OUTPUT_PATH = "E:\\考公\人民日报"
 
 # 方式4: 保存到当前项目目录
 # DEFAULT_OUTPUT_PATH = os.getcwd()
